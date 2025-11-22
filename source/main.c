@@ -22,7 +22,6 @@ typedef struct
 
 void initBackground(void)
 {
-    REG_DISPCNT = MODE_0 | BG0_ON;
     REG_BG0CNT = BG_SIZE_0 | SCREEN_BASE(31) | CHAR_BASE(0);
 
     memcpy(CHAR_BASE_BLOCK(0), bgTiles, bgTilesLen);
@@ -52,29 +51,87 @@ int main(void)
     irqInit();
     irqEnable(IRQ_VBLANK);
 
-    SetMode(MODE_0 | OBJ_ON | OBJ_1D_MAP);
+    SetMode(MODE_0 | OBJ_ON | BG0_ON | OBJ_1D_MAP);
 
     dmaCopy(sheetPal, SPRITE_PALETTE, sheetPalLen);
     dmaCopy(sheetTiles, SPRITE_GFX, sheetTilesLen);
 
-    int x = 100;
-    int y = 60;
+    for(int i = 0; i < 128; i++)
+    {
+        OAM[i].attr0 = ATTR0_DISABLED;
+        OAM[i].attr1 = 0;
+        OAM[i].attr2 = 0;
+    }
+
+    int x = 96;
+    int y = 64;
+
+    int upIndex = 0;
+    int downIndex = 4;
+    int leftIndex = 16;
+    int rightIndex = 20;
+    int bodyIndex = 32;
+    int pumpkinIndex = 36;
+    int bobIndex = 48;
+
+    int movingDirection = 2;
+    int currentSpriteIndex = leftIndex;
+
+    int timer = 0;
 
     initBackground();
-
+    
     while (1)
     {
         VBlankIntrWait();
+        scanKeys();
+
+        timer++;
+
+        if (keysHeld() & KEY_UP)    movingDirection = 0;
+        if (keysHeld() & KEY_DOWN)  movingDirection = 1;
+        if (keysHeld() & KEY_LEFT)  movingDirection = 2;
+        if (keysHeld() & KEY_RIGHT) movingDirection = 3;
+
+        if (timer % 10 == 0)
+        {
         
-        scanKeys(); 
+            switch (movingDirection)
+            {
+                case 0:
+                    currentSpriteIndex = upIndex;
+                    y -= 16;
+                    break;
 
-        OAM[0].attr0 = ATTR0_SQUARE | y;
-        OAM[0].attr1 = ATTR1_SIZE_16 | x;
-        OAM[0].attr2 = 0;
+                case 1:
+                    currentSpriteIndex = downIndex;
+                    y += 16;
+                    break;
+                
+                case 2:
+                    currentSpriteIndex = leftIndex;
+                    x -= 16;
+                    break;
 
-        if (keysHeld() & KEY_RIGHT) x++;
-        if (keysHeld() & KEY_LEFT)  x--;
-        if (keysHeld() & KEY_UP)    y--;
-        if (keysHeld() & KEY_DOWN)  y++;
+                case 3:
+                    currentSpriteIndex = rightIndex;
+                    x += 16;
+                    break;
+                
+                default:
+                    currentSpriteIndex = upIndex;
+                    break;
+            }    
+        }
+
+        // Player
+        OAM[0].attr0 = (y & 0xFF) | ATTR0_SQUARE | ATTR0_COLOR_16;
+        OAM[0].attr1 = (x & 0x1FF) | ATTR1_SIZE_16;
+        OAM[0].attr2 = currentSpriteIndex | ATTR2_PALETTE(0);
+
+        // Bob
+        OAM[1].attr0 = (80 & 0xFF) | ATTR0_SQUARE | ATTR0_COLOR_16;
+        OAM[1].attr1 = (144 & 0x1FF) | ATTR1_SIZE_16;
+        OAM[1].attr2 = bobIndex | ATTR2_PALETTE(0);
     }
 }
