@@ -79,8 +79,6 @@ void drawText(int x, int y, const char *text)
 
 int main(void)
 {
-    srand(time(NULL));
-
     irqInit();
     irqEnable(IRQ_VBLANK);
 
@@ -93,7 +91,7 @@ int main(void)
     dmaCopy(sheetPal, SPRITE_PALETTE, sheetPalLen);
     dmaCopy(sheetTiles, SPRITE_GFX, sheetTilesLen);
 
-    char buffer[30];
+    char buffer[256];
 
     for(int i = 0; i < 128; i++)
     {
@@ -123,6 +121,7 @@ int main(void)
     bob.x = 144; bob.y = 80; bob.direction = 0;
 
     int isGameOver = 0;
+    int isStartScreenOn = 1;
 
     initBackground();
     
@@ -133,7 +132,13 @@ int main(void)
 
         timer++;
 
-        if (!isGameOver)
+        if (isStartScreenOn)
+        {
+            if (keysHeld() & KEY_START) isStartScreenOn = 0;
+            srand(timer);
+        }
+
+        if (!isStartScreenOn && !isGameOver)
         {
             if (keysHeld() & KEY_UP)    body[0].direction = 0;
             if (keysHeld() & KEY_DOWN)  body[0].direction = 1;
@@ -143,7 +148,7 @@ int main(void)
         
         tailDirection = body[snakeLength-1].direction;
 
-        if (!isGameOver && timer % 10 == 0)
+        if (!isStartScreenOn && !isGameOver && timer % 10 == 0)
         {
             for (int i = snakeLength - 1; i > 0; i--)
             {
@@ -261,14 +266,19 @@ int main(void)
         OAM[127].attr1 = (bob.x & 0x1FF) | ATTR1_SIZE_16;
         OAM[127].attr2 = bobSpriteIndex | ATTR2_PALETTE(0) | ATTR2_PRIORITY(1);
 
-        if (!isGameOver)
+        if (isStartScreenOn)
         {
-            sprintf(buffer, "Score: %d  ", snakeLength);
+            siprintf(buffer, "Press start!");
             drawText(1, 1, buffer);
         }
-        else
+        else if (!isStartScreenOn && !isGameOver)
         {
-            sprintf(buffer, "Score: %d Max Score: %d", snakeLength, maxScore);
+            siprintf(buffer, "Score: %d%d    ", snakeLength/10, snakeLength%10);
+            drawText(1, 1, buffer);
+        }
+        else if (!isStartScreenOn && isGameOver)
+        {
+            siprintf(buffer, "Score: %d%d Max Score: %d%d", snakeLength/10, snakeLength%10, maxScore/10, maxScore%10);
             drawText(1, 1, "Game Over!");
             drawText(1, 2, buffer);
             if (keysHeld() & KEY_START)
