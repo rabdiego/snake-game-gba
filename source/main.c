@@ -1,40 +1,80 @@
-
 #include <gba_console.h>
 #include <gba_video.h>
 #include <gba_interrupt.h>
 #include <gba_systemcalls.h>
 #include <gba_input.h>
+#include <gba_sprites.h>
+#include <gba_dma.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-int main(void)
+#include "sheet.h"
+#include "bg.h"
+
+typedef struct
 {
-    REG_DISPCNT = MODE_3 | BG2_ENABLE;
+    u16 attr0;
+    u16 attr1;
+    u16 attr2;
+    u16 pad;
+} OBJ_ATTR;
 
-    int x = 100, y = 60;
+void initBackground(void)
+{
+    REG_DISPCNT = MODE_0 | BG0_ON;
+    REG_BG0CNT = BG_SIZE_0 | SCREEN_BASE(31) | CHAR_BASE(0);
 
-    while (1)
-	{
-        scanKeys();
-        u16 keys = keysHeld();
+    memcpy(CHAR_BASE_BLOCK(0), bgTiles, bgTilesLen);
+    memcpy(BG_PALETTE, bgPal, bgPalLen);
 
-        if (keys & KEY_UP) y--;
-        if (keys & KEY_DOWN) y++;
-        if (keys & KEY_LEFT) x--;
-        if (keys & KEY_RIGHT) x++;
+    u16 *map = SCREEN_BASE_BLOCK(31);
 
-        for (int i = 0; i < 240*160; i++)
-		{
-			((u16*)VRAM)[i] = RGB5(0, 0, 10);
-		}
+    int patternWidth = 4;
+    int patternHeight = 4;
 
-        for (int i = 0; i < 10; i++)
-		{
-			for (int j = 0; j < 10; j++)
-			{
-				((u16*)VRAM)[(y + i)*240 + (x + j)] = RGB5(31, 0, 0);
-			}
-		} 
+    for(int y = 0; y < 32; y++)
+    {
+        for(int x = 0; x < 32; x++)
+        {
+            int patternX = x % patternWidth;
+            int patternY = y % patternHeight;
+
+            int mapIndex = patternY * 32 + patternX;
+            
+            map[y * 32 + x] = bgMap[mapIndex];
+        }
     }
 }
 
+int main(void)
+{
+    irqInit();
+    irqEnable(IRQ_VBLANK);
+
+    SetMode(MODE_0 | OBJ_ON | OBJ_1D_MAP);
+
+    dmaCopy(sheetPal, SPRITE_PALETTE, sheetPalLen);
+    dmaCopy(sheetTiles, SPRITE_GFX, sheetTilesLen);
+
+    int x = 100;
+    int y = 60;
+
+    initBackground();
+
+    while (1)
+    {
+        VBlankIntrWait();
+        
+        scanKeys(); 
+
+        OAM[0].attr0 = ATTR0_SQUARE | y;
+        OAM[0].attr1 = ATTR1_SIZE_16 | x;
+        OAM[0].attr2 = 0;
+
+        if (keysHeld() & KEY_RIGHT) x++;
+        if (keysHeld() & KEY_LEFT)  x--;
+        if (keysHeld() & KEY_UP)    y--;
+        if (keysHeld() & KEY_DOWN)  y++;
+    }
+}
